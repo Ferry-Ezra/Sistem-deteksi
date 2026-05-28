@@ -40,7 +40,12 @@ app.config['MAX_CONTENT_LENGTH']   = 16 * 1024 * 1024  # 16MB
 app.config['TELEGRAM_BOT_TOKEN']   = os.environ.get('TELEGRAM_BOT_TOKEN') or '8716598524:AAHi_fuv4FEBL2apwAYVg9PCK1H4-MbFGF0'
 app.config['TELEGRAM_CHAT_ID']     = os.environ.get('TELEGRAM_CHAT_ID') or '2058298411'
 
-mysql = MySQL(app)
+db = pymysql.connect(
+    host="localhost",
+    user="root",
+    password="",
+    database="nama_database"
+)
 
 # Load Model YOLO
 model_path = os.path.join('model', 'best.pt')
