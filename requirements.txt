@@ -1,5 +1,4 @@
 Flask==3.0.3
-Flask-MySQLdb==1.0.1
-Werkzeug==3.0.3
 PyMySQL==1.1.0
+Werkzeug==3.0.3
 requests==2.31.0
