@@ -1,0 +1,138 @@
+{% extends "petugas/base.html" %}
+
+{% block title %}Laporan Deteksi{% endblock %}
+{% block page_subtitle %}{% endblock %}
+
+{% block content %}
+<!-- ── Filter & Table ─────────────────────────────── -->
+<div class="card">
+  <div class="card-header" style="justify-content: flex-start; gap: 16px;">
+    <!-- Actions -->
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <!-- Filter tanggal -->
+      <form method="GET" action="{{ url_for('laporan') }}" class="filter-bar" style="margin:0; gap:8px;">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <label style="font-size:.8rem; font-weight:600; color:#64748b; white-space:nowrap;">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+              style="display:inline; margin-right:4px;">
+              <rect x="3" y="4" width="18" height="18" rx="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            Tanggal:
+          </label>
+          <input type="date" name="tanggal" value="{{ tanggal }}" class="form-control"
+            style="width:auto; padding:7px 12px; font-size:.82rem;">
+        </div>
+        <button type="submit" class="btn btn-primary" style="padding:8px 14px; font-size:.82rem;">
+          Filter
+        </button>
+        {% if tanggal %}
+        <a href="{{ url_for('laporan') }}" class="btn btn-secondary" style="padding:8px 14px; font-size:.82rem;">
+          Reset
+        </a>
+        {% endif %}
+      </form>
+
+      {% if laporan_list %}
+      <!-- Hapus Semua -->
+      <form method="POST" action="{{ url_for('hapus_semua_laporan') }}"
+        onsubmit="return confirm('Apakah Anda yakin ingin menghapus SEMUA data bukti deteksi? Tindakan ini tidak dapat dibatalkan.');">
+        <button type="submit" class="btn btn-danger">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M3 6h18" />
+            <path d="M19 6V20a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <line x1="10" y1="11" x2="10" y2="17" />
+            <line x1="14" y1="11" x2="14" y2="17" />
+          </svg>
+          Hapus Semua
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card-body" style="padding:0;">
+    {% if laporan_list %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>Jenis Benda</th>
+            <th>Kamera</th>
+            <th>Tanggal</th>
+            <th>Waktu</th>
+            <th>Bukti</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in laporan_list %}
+          <tr>
+            <td style="color:#94a3b8; font-size:.8rem;">{{ loop.index }}</td>
+            <td>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div style="width:7px; height:7px; background:#dc2626; border-radius:50%; flex-shrink:0;"></div>
+                <span style="font-weight:600; color:#0f172a;">{{ item.jenis_benda }}</span>
+              </div>
+            </td>
+            <td style="font-size:.85rem; color:#475569;">
+              {{ item.camera_name or 'Simulasi CCTV' }}
+            </td>
+            <td style="font-size:.85rem; font-weight:600; color:#475569;">
+              {{ item.waktu.strftime('%d/%m/%Y') if item.waktu else '—' }}
+            </td>
+            <td style="font-size:.83rem; color:#64748b;">
+              {{ item.waktu.strftime('%I:%M:%S %p') if item.waktu else '' }}
+            </td>
+            <td>
+              {% if item.bukti %}
+              <a href="{{ url_for('static', filename='uploads/' + item.bukti) }}" target="_blank"
+                class="btn btn-secondary" style="padding:5px 10px; font-size:.75rem;">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                Lihat
+              </a>
+              {% else %}
+              <span style="font-size:.78rem; color:#cbd5e1;">Tidak ada</span>
+              {% endif %}
+            </td>
+            <td>
+              <form method="POST" action="{{ url_for('hapus_laporan', deteksi_id=item.id) }}"
+                onsubmit="return confirm('Hapus data deteksi ini?');">
+                <button type="submit" class="icon-btn-danger" title="Hapus">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M3 6h18" />
+                    <path d="M19 6V20a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <svg width="56" height="56" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+      <h3>Tidak Ada Data</h3>
+      <p>
+        {% if tanggal %}
+        Tidak ada deteksi pada tanggal <strong>{{ tanggal }}</strong>.
+        {% else %}
+        Belum ada laporan deteksi yang tercatat.
+        {% endif %}
+      </p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

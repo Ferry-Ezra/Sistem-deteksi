@@ -1,0 +1,130 @@
+{% extends "pusat_keamanan/base.html" %}
+
+{% block title %}Laporan Keamanan{% endblock %}
+{% block page_subtitle %}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header" style="justify-content: flex-start; gap: 16px;">
+    <!-- Actions -->
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <!-- Filter tanggal -->
+      <form method="GET" action="{{ url_for('dc_laporan_keamanan') }}" class="filter-bar" style="margin:0; gap:8px;">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <label style="font-size:.8rem; font-weight:600; color:#64748b; white-space:nowrap;">Tanggal:</label>
+          <input type="date" name="tanggal" value="{{ tanggal }}" class="form-control"
+            style="width:auto; padding:7px 12px; font-size:.82rem;">
+        </div>
+        <button type="submit" class="btn btn-primary" style="padding:8px 14px; font-size:.82rem;">Filter</button>
+        {% if tanggal %}
+        <a href="{{ url_for('dc_laporan_keamanan') }}" class="btn btn-secondary"
+          style="padding:8px 14px; font-size:.82rem;">Reset</a>
+        {% endif %}
+      </form>
+
+      {% if laporan_list %}
+      <!-- Hapus Semua -->
+      <form method="POST" action="{{ url_for('dc_hapus_semua_laporan') }}"
+        onsubmit="return confirm('Apakah Anda yakin ingin menghapus SEMUA data laporan keamanan? Tindakan ini tidak dapat dibatalkan.');">
+        <button type="submit" class="btn btn-danger">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M3 6h18" />
+            <path d="M19 6V20a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <line x1="10" y1="11" x2="10" y2="17" />
+            <line x1="14" y1="11" x2="14" y2="17" />
+          </svg>
+          Hapus Semua
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card-body" style="padding:0;">
+    {% if laporan_list %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>Tanggal</th>
+            <th>Waktu</th>
+            <th>Nama Toko</th>
+            <th>Lokasi</th>
+            <th>Laporan Masuk</th>
+            <th>Bukti</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in laporan_list %}
+          <tr>
+            <td style="color:#94a3b8; font-size:.8rem;">{{ loop.index }}</td>
+            <td style="font-size:.85rem; font-weight:600; color:#475569;">
+              {{ item.waktu.strftime('%d/%m/%Y') if item.waktu else '—' }}
+            </td>
+            <td style="font-size:.83rem; color:#64748b;">
+              {{ item.waktu.strftime('%I:%M:%S %p') if item.waktu else '—' }}
+            </td>
+            <td style="font-size:.85rem; font-weight:600; color:#0f172a;">
+              {{ item.user_nama_toko or '—' }}
+            </td>
+            <td style="font-size:.85rem; color:#475569;">
+              {% if item.user_alamat %}
+                <a href="https://www.google.com/maps?q={{ item.user_lat }},{{ item.user_lng }}" target="_blank" 
+                   style="font-weight: 600; line-height:1.4; max-width:250px; display:inline-flex; align-items:flex-start; gap:4px; color:#2563eb; text-decoration:none;" 
+                   onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="Buka di Google Maps">                 
+                <span>{{ item.user_alamat }}</span>
+                </a>
+              {% else %}
+                <div style="font-size:0.75rem; color:#94a3b8; font-style:italic;">
+                  (Lokasi belum diatur)
+                </div>
+              {% endif %}
+            </td>
+            <td>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div style="width:7px; height:7px; background:#dc2626; border-radius:50; flex-shrink:0;"></div>
+                <span style="font-weight:600; color:#0f172a;">Deteksi {{ item.jenis_benda }}</span>
+              </div>
+            </td>
+            <td>
+              {% if item.bukti %}
+              <a href="{{ url_for('static', filename='uploads/' + item.bukti) }}" target="_blank"
+                class="btn btn-secondary" style="padding:5px 10px; font-size:.75rem;">
+                Lihat
+              </a>
+              {% else %}
+              <span style="font-size:.78rem; color:#cbd5e1;">Tidak ada</span>
+              {% endif %}
+            </td>
+            <td>
+              <!-- Action Hapus -->
+              <form action="{{ url_for('dc_hapus_laporan', deteksi_id=item.id) }}" method="POST" style="margin:0;"
+                onsubmit="return confirm('Apakah Anda yakin ingin menghapus laporan keamanan ini? Tindakan ini tidak dapat dibatalkan.');">
+                <button type="submit" class="icon-btn-danger" title="Hapus Laporan">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M3 6h18" />
+                    <path d="M19 6V20a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <svg width="56" height="56" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+      <h3>Tidak Ada Laporan</h3>
+      <p>{% if tanggal %}Tidak ada laporan pada tanggal <strong>{{ tanggal }}</strong>.{% else %}Belum ada laporan
+        keamanan yang masuk.{% endif %}</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

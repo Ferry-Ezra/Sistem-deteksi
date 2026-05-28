@@ -1,0 +1,385 @@
+{% extends "petugas/base.html" %}
+
+{% block title %}Kamera{% endblock %}
+{# {% block page_title %}Live Streaming CCTV{% endblock %} #}
+{% block page_subtitle %}{% endblock %}
+
+{% block content %}
+<div style="display:grid; grid-template-columns: 1fr 360px; gap:24px; align-items:start;">
+
+  <!-- ── Kiri: Feed CCTV ──────────────────────────── -->
+  <div>
+    <div class="card" style="overflow:hidden;">
+      <div class="card-header">
+        <div class="card-title">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <polygon points="23 7 16 12 23 17 23 7" />
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+          </svg>
+          Kamera Aktif
+        </div>
+        <div style="display:flex; gap:10px;">
+          <!-- Dropdown Source -->
+          <select id="source-select" class="form-control" style="width:auto; min-width:140px;"
+            onchange="switchSource(this.value)">
+            <option value="cctv">Live CCTV</option>
+            <option value="rekaman">Simulasi Rekaman</option>
+          </select>
+
+          <!-- Input RTSP Manual -->
+          <div id="rtsp-manual" style="display:flex; gap:8px;">
+            <input type="text" id="rtsp-url" class="form-control" placeholder="rtsp://192.168.1.5..."
+              style="min-width: 200px; padding: 4px 8px; font-size: 0.85rem;">
+            <button type="button" class="btn btn-primary" style="padding: 4px 12px; font-size: 0.85rem;"
+              onclick="connectRTSP()">Connect</button>
+          </div>
+
+
+          <!-- Selector Video (rekaman) -->
+          <select id="video-select" class="form-control" style="width:auto; min-width:160px; display:none;"
+            onchange="switchVideo(this.value)">
+            <option value="" disabled selected>Pilih Rekaman...</option>
+            {% for vid in videos %}
+            <option value="{{ vid }}">{{ vid }}</option>
+            {% endfor %}
+            {% if not videos %}
+            <option value="" disabled>Belum ada video di static/videos/</option>
+            {% endif %}
+          </select>
+
+          <!-- Upload Video Button (only visible for rekaman) -->
+          <form id="upload-form" action="{{ url_for('upload_video') }}" method="POST" enctype="multipart/form-data"
+            style="display:none; align-items:center; gap:8px; margin:0;">
+            <input type="file" name="video" id="video-file" accept=".mp4,.avi,.mkv" style="display:none;"
+              onchange="this.form.submit()">
+            <button type="button" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.85rem;"
+              onclick="document.getElementById('video-file').click()">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+                style="margin-right:4px; vertical-align:-2px;">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+              </svg>
+              Upload Video
+            </button>
+          </form>
+
+          <!-- Delete Video Button (only visible when a rekaman is selected) -->
+          <form id="delete-form" action="" method="POST" style="display:none; align-items:center; margin:0;">
+            <button type="button" class="btn"
+              style="padding: 6px 12px; font-size: 0.85rem; background:#fee2e2; color:#ef4444; border:1px solid #fecaca; border-radius:6px; cursor:pointer;"
+              onclick="if(confirm('Yakin ingin menghapus video ini?')) { document.getElementById('cctv-stream').src = ''; setTimeout(() => document.getElementById('delete-form').submit(), 500); }">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+                style="margin-right:4px; vertical-align:-2px;">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              Hapus
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- CCTV feed area -->
+      <div class="cctv-wrap" id="cctv-wrap">
+        <div class="cctv-overlay-tl">
+          <span class="live-dot"></span>
+          <span id="cam-label">{{ cameras[0].name if cameras else 'Kamera' }}</span>
+          &nbsp;·&nbsp;
+          <span id="cctv-time"></span>
+        </div>
+
+        <!-- Jika ada stream URL, tampilkan video, jika tidak placeholder -->
+        <div class="cctv-placeholder" id="cctv-placeholder">
+          <svg width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24">
+            <polygon points="23 7 16 12 23 17 23 7" />
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+            <line x1="1" y1="1" x2="23" y2="23" stroke="#475569" stroke-width="1.5" />
+          </svg>
+          <p style="color:#64748b; font-weight:600; margin:0;">Stream Belum Tersedia</p>
+          <p style="font-size:.78rem; max-width:240px; color:#475569; margin:0;">
+            Hubungkan kamera CCTV dan deploy model YOLO untuk mengaktifkan streaming
+          </p>
+        </div>
+
+        <!-- Video element (aktif saat model sudah deploy - menampung frame CCTV & Rekaman via Flask /video_feed) -->
+        <img id="cctv-stream" src="" alt="CCTV Feed" style="display:none; width:100%; height:100%; object-fit:contain;">
+
+        <!-- Video Controls (Khusus Simulasi) -->
+        <div id="sim-controls"
+          style="display:none; position:absolute; bottom:0; left:0; right:0; padding:12px 20px; background:linear-gradient(transparent, rgba(15,23,42,0.9)); align-items:center; gap:16px;">
+          <button onclick="toggleSimPlay()"
+            style="background:none; border:none; color:white; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center;">
+            <svg id="btn-icon" width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M6 4h4v16H6zm8 0h4v16h-4z" /> <!-- Pause icon as default -->
+            </svg>
+          </button>
+          <span id="sim-time" style="color:white; font-size:0.9rem; font-family:monospace; font-weight:600;">00:00 /
+            00:00</span>
+
+          <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+            <svg width="16" height="16" fill="none" stroke="#94a3b8" stroke-width="2" viewBox="0 0 24 24"
+              style="margin-top:2px;">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <select id="sim-speed-dropdown" onchange="changeSpeed(this.value)"
+              style="background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.2); color:white; border-radius:4px; font-size:.8rem; padding:4px 8px; cursor:pointer;">
+              <option value="0.25">0.25x (Lambat)</option>
+              <option value="0.5">0.5x</option>
+              <option value="1.0" selected>1.0x (Normal)</option>
+              <option value="1.5">1.5x</option>
+              <option value="2.0">2.0x (Cepat)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detection overlay info -->
+      <div style="padding: 14px 20px; background:#0f172a; display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="width:8px; height:8px; background:#22c55e; border-radius:50%; display:inline-block;"></span>
+          <span style="font-size:.75rem; color:#94a3b8; font-weight:500;">Sistem Aktif</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span id="detect-dot"
+            style="width:8px; height:8px; background:#475569; border-radius:50%; display:inline-block; transition:all 0.3s;"></span>
+          <span style="font-size:.75rem; color:#94a3b8; font-weight:500; transition:all 0.3s;"
+            id="detect-status">Menunggu deteksi...</span>
+        </div>
+        <div style="margin-left:auto; font-size:.72rem; color:#475569;">
+          FPS: <strong id="fps-val" style="color:#94a3b8;">—</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Kanan: Info Model & Status ──────────────────── -->
+  <div style="display:flex; flex-direction:column; gap:20px;">
+
+    <!-- Info Model YOLOv8 -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          Info Model YOLO
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+
+          <!-- Nama Model -->
+          <div class="model-info-item" style="grid-column:1/-1;">
+            <div class="model-info-label">Model</div>
+            <div class="model-info-value" style="font-size:.95rem;">YOLO</div>
+          </div>
+
+          <!-- Precision & Recall -->
+          <div class="model-info-item">
+            <div class="model-info-label">Precision</div>
+            <div class="model-info-value" style="color:#2563eb;">0.948</div>
+          </div>
+          <div class="model-info-item">
+            <div class="model-info-label">Recall</div>
+            <div class="model-info-value" style="color:#d97706;">0.956</div>
+          </div>
+
+          <!-- mAP@0.5 -->
+          <div class="model-info-item" style="grid-column:1/-1;">
+            <div class="model-info-label">mAP@0.5</div>
+            <div class="model-info-value" style="color:#16a34a;">0.971</div>
+          </div>
+        </div>
+
+        <!-- Progress bar mAP50 -->
+        <div style="margin-top:16px;">
+          <div
+            style="display:flex; justify-content:space-between; font-size:.75rem; color:#64748b; font-weight:600; margin-bottom:6px;">
+            <span>mAP@0.5 Score</span>
+            <span>97.1%</span>
+          </div>
+          <div style="height:8px; background:#f1f5f9; border-radius:10px; overflow:hidden;">
+            <div
+              style="height:100%; width:94.2%; background:linear-gradient(90deg, #16a34a, #22c55e); border-radius:10px; transition:width .5s;">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Realtime clock di overlay CCTV
+  const cctv_time = document.getElementById('cctv-time');
+  function updateCctvTime() {
+    if (!cctv_time) return;
+    const now = new Date();
+    cctv_time.textContent = now.toLocaleTimeString('id-ID', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+  }
+  updateCctvTime();
+  setInterval(updateCctvTime, 1000);
+
+  // Inisialisasi awal
+  const videoSelect = document.getElementById('video-select');
+  const uploadForm = document.getElementById('upload-form');
+  const deleteForm = document.getElementById('delete-form');
+  const cctvStream = document.getElementById('cctv-stream');
+  const placeholder = document.getElementById('cctv-placeholder');
+  const camLabel = document.getElementById('cam-label');
+  const simControls = document.getElementById('sim-controls');
+
+  let isSimPlaying = true;
+  let simStatusInterval = null;
+
+  async function toggleSimPlay() {
+    isSimPlaying = !isSimPlaying;
+    const action = isSimPlaying ? 'play' : 'pause';
+    try {
+      await fetch('/api/sim_control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: action })
+      });
+      document.getElementById('btn-icon').innerHTML = isSimPlaying ? '<path d="M6 4h4v16H6zm8 0h4v16h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
+    } catch (e) { }
+  }
+
+  async function changeSpeed(speed_val) {
+    try {
+      await fetch('/api/sim_speed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ speed: parseFloat(speed_val) })
+      });
+    } catch (e) { }
+  }
+
+  function startSimStatusPolling() {
+    if (simStatusInterval) clearInterval(simStatusInterval);
+    simStatusInterval = setInterval(async () => {
+      try {
+        let res = await fetch('/api/sim_status');
+        let data = await res.json();
+
+        let curM = Math.floor(data.current_sec / 60).toString().padStart(2, '0');
+        let curS = Math.floor(data.current_sec % 60).toString().padStart(2, '0');
+        let totM = Math.floor(data.total_sec / 60).toString().padStart(2, '0');
+        let totS = Math.floor(data.total_sec % 60).toString().padStart(2, '0');
+
+        document.getElementById('sim-time').textContent = `${curM}:${curS} / ${totM}:${totS}`;
+
+        if (data.paused !== undefined) {
+          isSimPlaying = !data.paused;
+          document.getElementById('btn-icon').innerHTML = isSimPlaying ? '<path d="M6 4h4v16H6zm8 0h4v16h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
+        }
+
+        if (data.actual_fps !== undefined) {
+          document.getElementById('fps-val').textContent = data.actual_fps > 0 ? data.actual_fps : '—';
+        }
+
+        if (data.detecting !== undefined) {
+          const dot = document.getElementById('detect-dot');
+          const stat = document.getElementById('detect-status');
+          if (data.detecting) {
+            dot.style.background = '#ef4444';
+            dot.style.boxShadow = '0 0 8px #ef4444';
+            stat.textContent = data.det_msg;
+            stat.style.color = '#ef4444';
+          } else {
+            dot.style.background = '#475569';
+            dot.style.boxShadow = 'none';
+            stat.textContent = 'Menunggu deteksi...';
+            stat.style.color = '#94a3b8';
+          }
+        }
+      } catch (e) { }
+    }, 1000);
+  }
+
+  function stopSimStatusPolling() {
+    if (simStatusInterval) clearInterval(simStatusInterval);
+  }
+
+  function switchSource(sourceType) {
+    // Simpan pilihan terakhir ke sessionStorage agar tidak reset setelah refresh (misal habis upload video)
+    sessionStorage.setItem('lastCCTVSource', sourceType);
+
+    if (sourceType === 'cctv') {
+      document.getElementById('rtsp-manual').style.display = 'flex';
+      videoSelect.style.display = 'none';
+      uploadForm.style.display = 'none';
+      deleteForm.style.display = 'none';
+    } else {
+      document.getElementById('rtsp-manual').style.display = 'none';
+      videoSelect.style.display = 'block';
+      uploadForm.style.display = 'flex';
+      switchVideo();
+    }
+  }
+
+  // Connect custom RTSP URL
+  function connectRTSP() {
+    const url = document.getElementById('rtsp-url').value.trim();
+    if (!url) {
+      alert("Masukkan link RTSP terlebih dahulu!");
+      return;
+    }
+
+    camLabel.textContent = "Live CCTV Stream";
+
+    cctvStream.src = "/video_feed?source=" + encodeURIComponent(url);
+    cctvStream.style.display = 'block';
+    placeholder.style.display = 'none';
+    simControls.style.display = 'none';
+    stopSimStatusPolling();
+  }
+
+  // Switch video rekaman
+  function switchVideo() {
+    if (!videoSelect.options[videoSelect.selectedIndex]) {
+      deleteForm.style.display = 'none';
+      return;
+    }
+    const url = videoSelect.value;
+    const label = videoSelect.options[videoSelect.selectedIndex].text;
+
+    camLabel.textContent = label || "Simulasi Rekaman";
+
+    if (url) {
+      const filename = url.split('/').pop();
+      // Lewatkan filename video ke /video_feed
+      cctvStream.src = "/video_feed?source=" + encodeURIComponent(filename);
+      cctvStream.style.display = 'block';
+      placeholder.style.display = 'none';
+      simControls.style.display = 'flex';
+
+      deleteForm.action = "/delete_video/" + encodeURIComponent(filename);
+      deleteForm.style.display = 'flex';
+      startSimStatusPolling();
+    } else {
+      cctvStream.style.display = 'none';
+      cctvStream.src = "";
+      placeholder.style.display = 'flex';
+      deleteForm.style.display = 'none';
+      simControls.style.display = 'none';
+      stopSimStatusPolling();
+    }
+  }
+
+  // Set view ke pilihan terakhir pada load awal (default: cctv)
+  window.onload = () => {
+    const lastSource = sessionStorage.getItem('lastCCTVSource') || 'cctv';
+    document.getElementById('source-select').value = lastSource;
+    switchSource(lastSource);
+  };
+</script>
+{% endblock %}
